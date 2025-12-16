@@ -4,7 +4,7 @@ on:
   schedule:
     # 日本時間 16:00 は UTC 07:00
     # 平日(月-金)のみ実行
-    - cron: '0 7 * * 1-5'
+    - cron: '50 9 * * 1-5'
   # 手動実行も可能にする設定
   workflow_dispatch:
 
