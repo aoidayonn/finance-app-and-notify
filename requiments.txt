@@ -5,4 +5,5 @@ yfinance
 ta
 lightgbm
 matplotlib
+requests
 scikit-learn
