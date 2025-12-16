@@ -17,7 +17,7 @@ LINE_USER_ID = os.environ.get("LINE_USER_ID")
 
 # --- 設定: 判定ロジック (Webアプリと同一) ---
 SECTOR_SETTINGS = {
-    "投資・グロース (注目)": {"threshold": 0.55, "label": "注目"},
+    "投資・グロース (注目)": {"threshold": 0.20, "label": "注目"},
     "銀行・金融 (鉄板)": {"threshold": 0.55, "label": "鉄板"},
     "商社・市況 (高勝率)": {"threshold": 0.55, "label": "高勝率"},
     "半導体・ハイテク": {"threshold": 0.55, "label": "高ボラ"},
@@ -83,7 +83,7 @@ def get_macro_data():
 def get_data_with_macro(ticker_code, macro_df):
     symbol = f"{ticker_code}.T"
     try:
-        df = yf.download(symbol, period="2y", auto_adjust=True, progress=False)
+        df = yf.download(symbol, period="max", auto_adjust=True, progress=False)
     except:
         return None
 
