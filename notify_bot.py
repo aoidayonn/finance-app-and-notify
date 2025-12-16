@@ -12,7 +12,6 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # --- 設定: LINE API ---
-# GitHub Secretsから読み込むため、環境変数を使用
 LINE_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN")
 LINE_USER_ID = os.environ.get("LINE_USER_ID")
 
@@ -55,13 +54,13 @@ TARGET_TICKERS = {
 }
 
 
-# --- 関数群 (Webアプリから流用・軽量化) ---
+# --- 関数群 ---
 def get_macro_data():
     tickers = {"^N225": "Nikkei", "JPY=X": "USDJPY", "^GSPC": "SP500"}
     macro_df = pd.DataFrame()
     for ticker, name in tickers.items():
         try:
-            df = yf.download(ticker, start="2010-01-01", auto_adjust=True, progress=False)
+            df = yf.download(ticker, start="2000-01-01", auto_adjust=True, progress=False)
             if isinstance(df.columns, pd.MultiIndex):
                 try:
                     df.columns = df.columns.get_level_values(0)
@@ -76,7 +75,6 @@ def get_macro_data():
                 macro_df = macro_df.join(df[[f'{name}_Change', f'{name}_SMA5_Ratio']], how='outer')
         except:
             pass
-    # 時差調整
     macro_df['SP500_Change'] = macro_df['SP500_Change'].shift(1)
     macro_df['SP500_SMA5_Ratio'] = macro_df['SP500_SMA5_Ratio'].shift(1)
     return macro_df.ffill()
@@ -85,7 +83,7 @@ def get_macro_data():
 def get_data_with_macro(ticker_code, macro_df):
     symbol = f"{ticker_code}.T"
     try:
-        df = yf.download(symbol, period="2y", auto_adjust=True, progress=False)  # 期間を短縮して軽量化
+        df = yf.download(symbol, period="2y", auto_adjust=True, progress=False)
     except:
         return None
 
@@ -101,7 +99,6 @@ def get_data_with_macro(ticker_code, macro_df):
         df['SMA25'] = ta.trend.sma_indicator(df['Close'], window=25)
         df['SMA75'] = ta.trend.sma_indicator(df['Close'], window=75)
         df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
-
         indicator_bb = ta.volatility.BollingerBands(close=df['Close'], window=20, window_dev=2)
         df['BB_Position'] = (df['Close'] - indicator_bb.bollinger_lband()) / (
                 indicator_bb.bollinger_hband() - indicator_bb.bollinger_lband())
@@ -129,8 +126,12 @@ def train_and_predict():
     print("Market Data Download...")
     macro_df = get_macro_data()
 
-    # 先生役 (固定)
-    teacher_tickers = ["6758", "6861", "8035", "6501", "6902", "8306", "8031", "9984", "6098"]
+    teacher_tickers = [
+        "6758", "6861", "8035", "6501", "6902", "6981", "6954", "7741", "6920",
+        "7203", "7267", "8306", "8316", "8411", "8766", "8031", "8058", "8001",
+        "9984", "9432", "9433", "6098", "7974", "4502", "4568", "9983", "3382",
+        "6367", "4063", "2914"
+    ]
 
     train_dfs = []
     for code in teacher_tickers:
@@ -155,7 +156,6 @@ def train_and_predict():
     )
     model.fit(full_train_df[feature_cols], full_train_df['Target'])
 
-    # --- 予測実行 ---
     print("Predicting Targets...")
     results = []
 
@@ -171,7 +171,6 @@ def train_and_predict():
             current_price = df['Close'].iloc[-1]
             prob = model.predict_proba(latest_data)[0][1]
 
-            # 条件クリア判定
             if prob >= threshold:
                 results.append({
                     "name": name,
@@ -186,10 +185,6 @@ def train_and_predict():
 
 
 def send_line_message(messages):
-    if not messages:
-        print("No signals found.")
-        return
-
     # LINE API Endpoint
     url = "https://api.line.me/v2/bot/message/push"
     headers = {
@@ -197,15 +192,25 @@ def send_line_message(messages):
         "Authorization": f"Bearer {LINE_ACCESS_TOKEN}"
     }
 
-    # メッセージ本文作成
-    text_content = "【🎯 AI買いシグナル検知】\n以下の銘柄がチャンスです！\n"
-    for item in messages:
-        text_content += f"\n💎 {item['name']} ({item['code']})"
-        text_content += f"\n   株価: {item['price']:,.0f}円"
-        text_content += f"\n   AI確信度: {item['prob']:.1%} (閾値 {item['threshold']:.2f})"
-        text_content += f"\n   セクター: {item['category']}\n"
+    # メッセージ本文の作成（分岐ロジック）
+    if not messages:
+        # シグナルなしの場合
+        text_content = (
+            "【📊 本日のAI分析結果】\n\n"
+            "現在、Sランク基準（勝率70%超期待）を満たす買いシグナルはありません。\n\n"
+            "無理なエントリーは控え、次のチャンスを待ちましょう。☕\n"
+            "(明日の16:00に再度分析します)"
+        )
+    else:
+        # シグナルありの場合
+        text_content = "【🎯 AI買いシグナル検知】\n以下の銘柄がチャンスです！\n"
+        for item in messages:
+            text_content += f"\n💎 {item['name']} ({item['code']})"
+            text_content += f"\n   株価: {item['price']:,.0f}円"
+            text_content += f"\n   AI確信度: {item['prob']:.1%} (閾値 {item['threshold']:.2f})"
+            text_content += f"\n   セクター: {item['category']}\n"
 
-    text_content += "\n⚠️ 投資は自己責任で行ってください。"
+        text_content += "\n⚠️ 投資は自己責任で行ってください。"
 
     data = {
         "to": LINE_USER_ID,
@@ -220,12 +225,10 @@ def send_line_message(messages):
 
 
 if __name__ == "__main__":
-    # 環境変数のチェック
     if not LINE_ACCESS_TOKEN or not LINE_USER_ID:
         print("Error: LINE API Token or User ID is missing.")
     else:
+        # 予測を実行
         signals = train_and_predict()
-        if signals:
-            send_line_message(signals)
-        else:
-            print("No actionable signals today.")
+        # シグナルがあってもなくても通知関数を呼ぶ
+        send_line_message(signals)
