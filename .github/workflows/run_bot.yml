@@ -30,3 +30,8 @@ jobs:
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
 
         run: python notify_bot.py
+
+        # 60日ルールの自動停止を回避するおまじない
+      - name: Keepalive Workflow
+        uses: gautamkrishnar/keepalive-workflow@v2
+
