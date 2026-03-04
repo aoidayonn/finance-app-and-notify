@@ -5,12 +5,16 @@ on:
     # 日本時間 16:00 は UTC 07:00
     # 平日(月-金)のみ実行
     - cron: '0 7 * * 1-5'
-  # 手動実行も可能にする設定
   workflow_dispatch:
 
 jobs:
   run-bot:
     runs-on: ubuntu-latest
+    # ★追加: GitHub APIを叩くための権限を明記
+    permissions:
+      actions: write
+      contents: read
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -28,10 +32,10 @@ jobs:
         env:
           LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
-
         run: python notify_bot.py
 
-        # 60日ルールの自動停止を回避するおまじない
+      # ★修正: 規約違反にならない安全な方法（公式API）で60日タイマーをリセット
       - name: Keepalive Workflow
-        uses: gautamkrishnar/keepalive-workflow@v2
-
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow enable "AI Stock Alert Bot" --repo ${{ github.repository }} || true
