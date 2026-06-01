@@ -39,3 +39,5 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh workflow enable "AI Stock Alert Bot" --repo ${{ github.repository }} || true
+
+# 更新用コミット1回目
